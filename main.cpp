@@ -3,7 +3,11 @@
 //
 #include <iostream>
 #include <vector>
+#include <chrono>
+
+#ifdef unix
 #include <sys/utsname.h>
+#endif
 
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
@@ -17,8 +21,11 @@
 #include <opencv2/cvv/dmatch.hpp>
 #include <opencv2/cvv/final_show.hpp>
 
+#include "view.hpp"
+
 using namespace std;
 using namespace cv;
+using namespace std::chrono;
 
 template<class T> std::string toString(const T& p_arg)
 {
@@ -28,15 +35,17 @@ template<class T> std::string toString(const T& p_arg)
 }
 
 int main(int argc, char* argv[]){
+#ifdef unix
 	utsname u;
 	if(uname(&u) != 0){
 		return 1;
 	}
+	std::cout << "Hello from " << u.nodename << std::endl;
+#endif
+
 	if(argc < 2){
 		return 1;
 	}
-
-	std::cout << "Hello from " << u.nodename << std::endl;
 
 	int max_feature_count = 500;
 	Ptr<ORB> detector = ORB::create(max_feature_count);
@@ -45,35 +54,41 @@ int main(int argc, char* argv[]){
 	string src_path = "/home/images/";
 
 	for(int i=1; i<argc; i++){
-		string open_path = src_path + string(argv[i]);
+		string imname_str = string(argv[i]);
+		string open_path = src_path + imname_str;
 		cout << "Open " << open_path << endl;
 
 		Mat img_read = cv::imread(open_path, 0);
 		cout << "image W=" << img_read.cols << " H=" << img_read.rows << endl;
 
-		imshow("img", img_read);
-		waitKey(0);
-
 		string img_id_str = "img_read";
 		cvv::showImage(img_read, CVVISUAL_LOCATION, img_id_str.c_str());
 
-		// gaussian blur
-		Mat img_blur;
-		GaussianBlur(img_read, img_blur, Size(3,3), 0,0, BORDER_DEFAULT);
-		cvv::debugFilter(img_read, img_blur, CVVISUAL_LOCATION, "gaussian");
+		// convert to rgb
+		Mat img_rgb;
+		cvtColor(img_read, img_rgb, COLOR_GRAY2BGR);
 
-		// sobel filter
-		Mat grad_x, grad_y, abs_grad_x, abs_grad_y;
-		Sobel(img_blur, grad_x, -1, 1, 0, 3);
-		cvv::debugFilter(img_blur, grad_x, CVVISUAL_LOCATION, "sobel x");
-		Sobel(img_blur, grad_y, -1, 0, 1, 3);
-		cvv::debugFilter(img_blur, grad_y, CVVISUAL_LOCATION, "sobel y");
+		// Set roi
+		Rect roi;
+		SetROI(img_rgb, imname_str, roi);
 
-		convertScaleAbs(grad_x, abs_grad_x);
-		convertScaleAbs(grad_y, abs_grad_y);
+		high_resolution_clock::time_point t1 = high_resolution_clock::now();
+		Mat img_roi = img_read(roi);
 
-		Mat grad;
-		addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+		// laplacian
+		Mat img_lap, img_lap_8u;
+		Laplacian(img_roi, img_lap, CV_64F);
+		Laplacian(img_roi, img_lap_8u, CV_8U);
+		cvv::debugFilter(img_roi, img_lap_8u, CVVISUAL_LOCATION, "laplacian");
+
+		// measure blurry
+		Scalar mean_, stdev_;
+		cv::meanStdDev(img_lap, mean_, stdev_);
+		high_resolution_clock::time_point t2 = high_resolution_clock::now();
+
+		cout << "blurry : " << stdev_[0] << endl;
+		duration<double> time_ = duration_cast<milliseconds>(t2 - t1) ;
+		cout << "time : " << time_.count() << " ms" << endl;
 
 		// detect ORB features
 		vector<KeyPoint> keypoints;
@@ -81,9 +96,6 @@ int main(int argc, char* argv[]){
 		detector->detectAndCompute(img_read, cv::noArray(), keypoints, descriptors);
 		cout << "detected keypoints: " << keypoints.size() << endl;
 
-		// convert to rgb
-		Mat img_rgb;
-		cvtColor(img_read, img_rgb, COLOR_GRAY2BGR);
 		//cvv::debugFilter(img_read, img_rgb, CVVISUAL_LOCATION, "to rgb");
 		cvv::showImage(img_rgb, CVVISUAL_LOCATION, "to rgb");
 

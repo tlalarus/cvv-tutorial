@@ -8,6 +8,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 
 option(CVVISUAL_DEBUG_MODE "cvvisual-debug-mode" ON)
 
-add_executable(cvv_tutorial main.cpp)
+add_executable(cvv_tutorial main.cpp view.cpp view.hpp)
 target_link_libraries(cvv_tutorial
         opencv_core opencv_imgproc opencv_features2d opencv_highgui opencv_cvv)
