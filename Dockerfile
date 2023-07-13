@@ -56,3 +56,8 @@ RUN wget --no-check-certificate https://github.com/opencv/opencv/archive/${OPENC
     sh -c 'echo '/usr/local/lib' > /etc/ld.so.conf.d/opencv.conf' && \
     ldconfig && \
     rm -rf /tmp/opencv_build
+
+RUN cd /home && \
+    mkdir images cvv-tutorial \
+
+COPY . /home/cvv-tutorial/
